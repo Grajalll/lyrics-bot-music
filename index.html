@@ -1,167 +1,90 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lyrics Bot Controller 🎶</title>
-    <style>
-        :root {
-            --bg-color: #0f0f1a;
-            --panel-bg: #1a1a2e;
-            --accent-color: #6a11cb;
-            --accent-gradient: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-            --text-color: #e0e0e6;
-        }
+import os
+import urllib.parse
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import requests
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
+app = Flask(__name__)
+CORS(app)
 
-        .container {
-            background-color: var(--panel-bg);
-            padding: 2.5rem;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            width: 100%;
-            max-width: 500px;
-            text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
+DISCORD_WEBHOOK_URL = "https://discord.com"
 
-        h1 {
-            font-size: 1.8rem;
-            margin-bottom: 0.5rem;
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+HEADERS_PROXIES = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+}
 
-        p.subtitle {
-            color: #8b8b9e;
-            font-size: 0.9rem;
-            margin-bottom: 2rem;
-        }
+def normalizar_texto(texto):
+    caracteres_limpios = "".join([c.lower() for c in texto if c.isalnum() or c.isspace()])
+    return " ".join(caracteres_limpios.split())
 
-        textarea {
-            width: 100%;
-            height: 100px;
-            background-color: #0f0f1a;
-            border: 2px solid #2d2d44;
-            border-radius: 8px;
-            color: #fff;
-            padding: 10px;
-            box-sizing: border-box;
-            resize: none;
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-            margin-bottom: 1.5rem;
-        }
+def identificar_cancion_html(frase):
+    """Busca la canción usando un formato HTML directo que no se bloquea"""
+    query = f'"{frase}" lyrics'
+    url_busqueda = f"https://duckduckgo.com{urllib.parse.quote(query)}"
+    try:
+        respuesta = requests.get(url_busqueda, headers=HEADERS_PROXIES, timeout=10)
+        if respuesta.status_code == 200:
+            texto = respuesta.text.lower()
+            # Buscamos patrones comunes de URLs de Genius en el texto de los resultados
+            if "://genius.com" in texto:
+                parte_url = texto.split("://genius.com")[1]
+                slug = parte_url.split('"')[0].split('&')[0].replace("-lyrics", "")
+                partes = slug.split("-")
+                if len(partes) >= 2:
+                    artista = partes[0].replace("/", "").strip().title()
+                    titulo = " ".join(partes[1:]).strip().title()
+                    return artista, titulo
+    except Exception as e:
+        print(f"Error al buscar canción: {e}")
+    return None, None
 
-        textarea:focus {
-            outline: none;
-            border-color: #2575fc;
-        }
+def descargar_letra_api(artista, titulo):
+    url_api = f"https://lyrics.ovh{urllib.parse.quote(artista)}/{urllib.parse.quote(titulo)}"
+    try:
+        respuesta = requests.get(url_api, headers=HEADERS_PROXIES, timeout=10)
+        if respuesta.status_code == 200:
+            letra = respuesta.json().get("lyrics", "")
+            if letra:
+                return [linea.strip() for linea in letra.split("\n") if linea.strip()]
+    except Exception as e:
+        print(f"Error en API de letras: {e}")
+    return []
 
-        button {
-            width: 100%;
-            background: var(--accent-gradient);
-            color: white;
-            border: none;
-            padding: 12px;
-            font-size: 1rem;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: transform 0.1s ease, box-shadow 0.3s ease;
-        }
-
-        button:hover {
-            box-shadow: 0 0 15px rgba(37, 117, 252, 0.4);
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
-
-        .status-box {
-            margin-top: 1.5rem;
-            padding: 10px;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            display: none;
-            text-align: left;
-            line-height: 1.4;
-        }
-
-        .success { background-color: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid #2ecc71; }
-        .error { background-color: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid #e74c3c; }
-        .loading { background-color: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid #f1c40f; }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <h1>Lyrics Bot Controller</h1>
-    <p class="subtitle">Escribe una línea de la canción para enviarla a Discord</p>
+@app.route("/cantar", methods=["POST"])
+def procesar_canto():
+    datos = request.get_json()
+    if not datos or "frase" not in datos:
+        return jsonify({"error": "Falta el parametro 'frase'"}), 400
+        
+    linea_usuario = datos["frase"]
+    artista, titulo = identificar_cancion_html(linea_usuario)
     
-    <textarea id="lyricsInput" placeholder="Ejemplo: you are 18 year old girl who live in small city of japan..."></textarea>
-    <button onclick="enviarLetra()">🎤 Cantar en Discord</button>
+    if not artista or not titulo:
+        return jsonify({"status": "No se pudo identificar la cancion en internet"}), 404
+        
+    lineas_letra = descargar_letra_api(artista, titulo)
+    entrada_limpia = normalizar_texto(linea_usuario)
     
-    <div id="status" class="status-box"></div>
-</div>
+    for i, linea_oficial in enumerate(lineas_letra):
+        if entrada_limpia in normalizar_texto(linea_oficial):
+            if i + 1 < len(lineas_letra):
+                verso_siguiente = lineas_letra[i + 1]
+                
+                query_ym = f"{artista} {titulo}"
+                url_music = f"https://youtube.com{urllib.parse.quote(query_ym)}"
+                
+                payload = {
+                    "content": f"🎶 **{artista} - {titulo}** \n▶️ {url_music}",
+                    "embeds": [{
+                        "description": f"🎤 *...cantando desde la nube:*\n\n**\"{verso_siguiente.upper()}\"**",
+                        "color": 3066993
+                    }]
+                }
+                requests.post(DISCORD_WEBHOOK_URL, json=payload)
+                return jsonify({"status": "Exito", "cancion": f"{artista} - {titulo}", "verso": verso_siguiente})
+                
+    return jsonify({"status": "Linea no encontrada dentro de la letra"}), 404
 
-<script>
-    async function enviarLetra() {
-        const input = document.getElementById("lyricsInput");
-        const statusBox = document.getElementById("status");
-        const frase = input.value.trim();
-        
-        if (!frase) {
-            mostrarStatus("Por favor, escribe algo antes de cantar.", "error");
-            return;
-        }
-        
-        mostrarStatus("Buscando canción con Google en la nube...", "loading");
-        
-        try {
-            // Conexión directa hacia tu nuevo servidor activo en Render
-            const respuesta = await fetch("https://onrender.com", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ frase: frase })
-            });
-            
-            const resultado = await respuesta.json();
-            
-            if (respuesta.status === 200) {
-                mostrarStatus(`✅ <strong>¡Enviado con éxito!</strong><br>🎵 Canción: <b>${resultado.cancion}</b><br>🎤 Siguiente línea enviada a Discord: <i>"${resultado.verso}"</i>`, "success");
-                input.value = ""; // Limpia la caja de texto tras el envío exitoso
-            } else {
-                mostrarStatus(`❌ Error en el servidor: ${resultado.status || "No se localizó la letra"}`, "error");
-            }
-        } catch (error) {
-            mostrarStatus("❌ Error de comunicación: No se pudo conectar con el servidor de Render. Revisa que el servidor no esté inactivo.", "error");
-            console.error(error);
-        }
-    }
-
-    function mostrarStatus(mensaje, tipo) {
-        const statusBox = document.getElementById("status");
-        statusBox.innerHTML = mensaje;
-        statusBox.className = "status-box " + tipo;
-        statusBox.style.display = "block";
-    }
-</script>
-
-</body>
-</html>
+if __name__ == "__main__":
+    puerto = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=puerto)
