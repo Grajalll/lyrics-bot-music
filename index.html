@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lyrics Bot Controller 🎶</title>
+    <style>
+        :root {
+            --bg-color: #0f0f1a;
+            --panel-bg: #1a1a2e;
+            --accent-color: #6a11cb;
+            --accent-gradient: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            --text-color: #e0e0e6;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background-color: var(--panel-bg);
+            padding: 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            background: var(--accent-gradient);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            color: #8b8b9e;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            background-color: #0f0f1a;
+            border: 2px solid #2d2d44;
+            border-radius: 8px;
+            color: #fff;
+            padding: 10px;
+            box-sizing: border-box;
+            resize: none;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+            margin-bottom: 1.5rem;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #2575fc;
+        }
+
+        button {
+            width: 100%;
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.3s ease;
+        }
+
+        button:hover {
+            box-shadow: 0 0 15px rgba(37, 117, 252, 0.4);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .status-box {
+            margin-top: 1.5rem;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .success { background-color: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid #2ecc71; }
+        .error { background-color: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid #e74c3c; }
+        .loading { background-color: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid #f1c40f; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Lyrics Bot Controller</h1>
+    <p class="subtitle">Escribe una línea de la canción para enviarla a Discord</p>
+    
+    <textarea id="lyricsInput" placeholder="Ejemplo: you are 18 year old girl who live in small city of japan..."></textarea>
+    <button onclick="enviarLetra()">🎤 Cantar en Discord</button>
+    
+    <div id="status" class="status-box"></div>
+</div>
+
+<script>
+    async function enviarLetra() {
+        const input = document.getElementById("lyricsInput");
+        const statusBox = document.getElementById("status");
+        const frase = input.value.trim();
+        
+        if (!frase) {
+            mostrarStatus("Por favor, escribe algo antes de cantar.", "error");
+            return;
+        }
+        
+        mostrarStatus("Buscando canción y conectando con la nube...", "loading");
+        
+        try {
+            // Conexión directa con tu servidor desplegado en Render
+            const respuesta = await fetch("https://onrender.com", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ frase: frase })
+            });
+            
+            const resultado = await respuesta.json();
+            
+            if (respuesta.status === 200) {
+                mostrarStatus(`✅ ¡Enviado! Canción: <strong>${resultado.cancion}</strong>.<br>Siguiente verso enviado a Discord.`, "success");
+                input.value = ""; // Limpia el cuadro de texto automáticamente
+            } else {
+                mostrarStatus(`❌ Error: ${resultado.status || "No encontrado"}`, "error");
+            }
+        } catch (error) {
+            mostrarStatus("❌ Error de red: No se pudo conectar con el servidor de Render.", "error");
+            console.error(error);
+        }
+    }
+
+    function mostrarStatus(mensaje, tipo) {
+        const statusBox = document.getElementById("status");
+        statusBox.innerHTML = mensaje;
+        statusBox.className = "status-box " + tipo;
+        statusBox.style.display = "block";
+    }
+</script>
