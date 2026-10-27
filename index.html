@@ -40,7 +40,6 @@
             font-size: 1.8rem;
             margin-bottom: 0.5rem;
             background: var(--accent-gradient);
-            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -98,6 +97,8 @@
             border-radius: 6px;
             font-size: 0.9rem;
             display: none;
+            text-align: left;
+            line-height: 1.4;
         }
 
         .success { background-color: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid #2ecc71; }
@@ -128,10 +129,10 @@
             return;
         }
         
-        mostrarStatus("Buscando canción y conectando con la nube...", "loading");
+        mostrarStatus("Buscando canción con Google en la nube...", "loading");
         
         try {
-            // Conexión directa con tu servidor desplegado en Render
+            // Conexión directa hacia tu nuevo servidor activo en Render
             const respuesta = await fetch("https://onrender.com", {
                 method: "POST",
                 headers: {
@@ -143,13 +144,13 @@
             const resultado = await respuesta.json();
             
             if (respuesta.status === 200) {
-                mostrarStatus(`✅ ¡Enviado! Canción: <strong>${resultado.cancion}</strong>.<br>Siguiente verso enviado a Discord.`, "success");
-                input.value = ""; // Limpia el cuadro de texto automáticamente
+                mostrarStatus(`✅ <strong>¡Enviado con éxito!</strong><br>🎵 Canción: <b>${resultado.cancion}</b><br>🎤 Siguiente línea enviada a Discord: <i>"${resultado.verso}"</i>`, "success");
+                input.value = ""; // Limpia la caja de texto tras el envío exitoso
             } else {
-                mostrarStatus(`❌ Error: ${resultado.status || "No encontrado"}`, "error");
+                mostrarStatus(`❌ Error en el servidor: ${resultado.status || "No se localizó la letra"}`, "error");
             }
         } catch (error) {
-            mostrarStatus("❌ Error de red: No se pudo conectar con el servidor de Render.", "error");
+            mostrarStatus("❌ Error de comunicación: No se pudo conectar con el servidor de Render. Revisa que el servidor no esté inactivo.", "error");
             console.error(error);
         }
     }
@@ -161,3 +162,6 @@
         statusBox.style.display = "block";
     }
 </script>
+
+</body>
+</html>
