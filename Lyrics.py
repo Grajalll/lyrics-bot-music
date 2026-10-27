@@ -16,12 +16,12 @@ HEADERS_PROXIES = {
 }
 
 def normalizar_texto(texto):
-    """Limpia cadenas para hacer emparejamientos de versos mucho más precisos"""
+    """Limpia cadenas para hacer emparejamientos de versos mucho mas precisos"""
     caracteres_limpios = "".join([c.lower() for c in texto if c.isalnum() or c.isspace()])
     return " ".join(caracteres_limpios.split())
 
 def identificar_cancion_ddg(frase):
-    """Busca la canción usando la web de DuckDuckGo evitando bloqueos de captcha"""
+    """Busca la cancion usando la web de DuckDuckGo evitando bloqueos de captcha"""
     query = f'"{frase}" lyrics genius'
     url_busqueda = f"https://duckduckgo.com"
     payload = {"q": query}
@@ -31,15 +31,17 @@ def identificar_cancion_ddg(frase):
         if respuesta.status_code == 200:
             texto_html = respuesta.text.lower()
             
-            # Si Genius está en los resultados de búsqueda, extraemos el slug de la URL
+            # Si Genius esta en los resultados de busqueda, extraemos la URL limpia
             if "://genius.com" in texto_html:
                 bloques = texto_html.split("://genius.com")
                 for bloque in bloques[1:]:
-                    slug = bloque.split('"')[0].split("'")[0].split("&")[0].split(")")[0].strip()
-                    if "-lyrics" in slug or len(slug) > 5:
-                        slug_limpio = slug.replace("-lyrics", "")
+                    # Extraemos el fragmento inicial cortando en las comillas del enlace HTML
+                    fragmento = bloque.split('"')[0].split("'")[0].split("&")[0].split(")")[0].strip()
+                    if "-lyrics" in fragmento or len(fragmento) > 5:
+                        slug_limpio = fragmento.replace("-lyrics", "")
                         partes = slug_limpio.split("-")
                         if len(partes) >= 2:
+                            # El primer fragmento suele ser el artista y el resto el titulo
                             artista = partes[0].replace("/", "").strip().title()
                             titulo = " ".join(partes[1:]).strip().title()
                             return artista, titulo
@@ -48,7 +50,7 @@ def identificar_cancion_ddg(frase):
     return None, None
 
 def descargar_letra_api(artista, titulo):
-    """Conecta con la base de datos de letras públicas de forma de lista"""
+    """Conecta con la base de datos de letras publicas"""
     url_api = f"https://lyrics.ovh{urllib.parse.quote(artista)}/{urllib.parse.quote(titulo)}"
     try:
         respuesta = requests.get(url_api, headers=HEADERS_PROXIES, timeout=10)
@@ -69,7 +71,7 @@ def procesar_canto():
     linea_usuario = datos["frase"]
     artista, titulo = identificar_cancion_ddg(linea_usuario)
     
-    # Intento de respaldo secundario sin comillas si la búsqueda exacta falla
+    # Intento de respaldo secundario sin comillas si la busqueda exacta falla
     if not artista or not titulo:
         artista, titulo = identificar_cancion_ddg(linea_usuario.replace('"', ''))
         
@@ -79,7 +81,7 @@ def procesar_canto():
     lineas_letra = descargar_letra_api(artista, titulo)
     entrada_limpia = normalizar_texto(linea_usuario)
     
-    # Escaneo del arreglo de versos para encontrar el siguiente índice de canto
+    # Escaneo del arreglo de versos para encontrar el siguiente indice de canto
     for i, linea_oficial in enumerate(lineas_letra):
         if entrada_limpia in normalizar_texto(linea_oficial) or normalizar_texto(linea_oficial) in entrada_limpia:
             if i + 1 < len(lineas_letra):
